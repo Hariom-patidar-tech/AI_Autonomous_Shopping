@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexShop — AI Universal Shopping & Real-Time Price Comparison</title>
+  <meta name="description" content="NexShop AI — Search any real purchasable product on the live web with verified cross-platform price comparison across Amazon, Flipkart, Croma, and more." />
+  
+  <!-- Typography: Amazon Ember & Inter / Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body class="amazon-nexshop-theme">
+
+  <!-- =========================================================================
+       AMAZON-STYLE MAIN HEADER (NAVBAR)
+       ========================================================================= -->
+  <header class="amazon-header">
+    <div class="nav-belt">
+      
+      <!-- NexShop Brand Logo -->
+      <a href="/" class="nav-logo-box" title="NexShop — AI Shopping Engine">
+        <div class="nexshop-logo-wrap">
+          <span class="logo-text">nex<span class="logo-highlight">shop</span></span>
+          <span class="logo-domain">.in</span>
+          <!-- Amazon-style curved orange smile arrow -->
+          <svg class="amazon-smile-arrow" viewBox="0 0 100 24" fill="none">
+            <path d="M4 10 C 35 24, 70 24, 96 6" stroke="#ff9900" stroke-width="3.5" stroke-linecap="round"/>
+            <polygon points="90,4 98,6 94,14" fill="#ff9900"/>
+          </svg>
+        </div>
+        <span class="ai-badge-pill">AI 2.0</span>
+      </a>
+
+      <!-- Location / Delivery Pin -->
+      <div class="nav-deliver-box" title="Autonomous Multi-Platform Delivery Engine">
+        <span class="nav-pin-icon">📍</span>
+        <div class="nav-deliver-text">
+          <span class="nav-line-1">Deliver to India</span>
+          <span class="nav-line-2">All Verified Stores</span>
+        </div>
+      </div>
+
+      <!-- Integrated Amazon-Style Global Search Bar -->
+      <div class="nav-search-container">
+        <form id="search-form" class="nav-search-form">
+          <div class="nav-search-dropdown-box">
+            <select id="search-category-select" class="nav-search-dropdown">
+              <option value="all">All Stores</option>
+              <option value="mobiles">Mobiles</option>
+              <option value="laptops">Laptops</option>
+              <option value="fashion">Fashion</option>
+              <option value="electronics">Electronics</option>
+            </select>
+          </div>
+
+          <div class="nav-search-input-field">
+            <input
+              type="text"
+              id="search-input"
+              class="nav-input"
+              placeholder="Search NexShop for any product (e.g. iPhone 15, Redmi Note 10S, gaming laptop, Nike shoes)..."
+              autocomplete="off"
+              required
+            />
+            <button type="button" id="clear-search-btn" class="nav-clear-btn" style="display:none;" onclick="App.clearSearch()">✕</button>
+          </div>
+
+          <button type="submit" id="search-submit-btn" class="nav-search-submit-btn" title="Search Real Products">
+            <span class="search-mag-icon">🔍</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Right Header Actions (Live Status & Trust Badges) -->
+      <div class="nav-right-items">
+        <div class="nav-link-box live-data-indicator" title="Connected to Real Live Search Providers">
+          <span class="live-dot-pulse"></span>
+          <div class="nav-text-col">
+            <span class="nav-line-1" style="color: #00e9bf;">100% Real-World</span>
+            <span class="nav-line-2">0% Mock Data</span>
+          </div>
+        </div>
+
+        <div class="nav-link-box" title="Direct verified merchant links">
+          <span class="nav-link-icon">🛡️</span>
+          <div class="nav-text-col">
+            <span class="nav-line-1">Security Guard</span>
+            <span class="nav-line-2">User Checkout</span>
+          </div>
+        </div>
+
+        <a href="#products-grid" class="nav-cart-box" title="View Discovered Offers">
+          <div class="nav-cart-icon-wrap">
+            <span class="cart-icon">🛒</span>
+            <span id="header-cart-count" class="cart-count">0</span>
+          </div>
+          <span class="cart-label">Deals</span>
+        </a>
+      </div>
+
+    </div>
+
+    <!-- Sub-Navbar (Category & Store Filter Bar) -->
+    <nav class="nav-subnav">
+      <div class="subnav-left">
+        <button class="subnav-item all-btn" onclick="App.filterByPlatform('all')">
+          <span class="hamburger-icon">☰</span> All Stores
+        </button>
+        <button class="subnav-item" onclick="App.filterByPlatform('Amazon')">
+          <span class="store-dot store-amazon"></span> Amazon Deals
+        </button>
+        <button class="subnav-item" onclick="App.filterByPlatform('Flipkart')">
+          <span class="store-dot store-flipkart"></span> Flipkart
+        </button>
+        <button class="subnav-item" onclick="App.filterByPlatform('Croma')">
+          <span class="store-dot store-croma"></span> Croma
+        </button>
+        <button class="subnav-item" onclick="App.filterByPlatform('Reliance Digital')">
+          <span class="store-dot store-reliance"></span> Reliance Digital
+        </button>
+        <span class="subnav-separator">|</span>
+        <button class="subnav-item link-tag" onclick="App.setQuery('gaming laptop under 60000')">Laptops Under ₹60k</button>
+        <button class="subnav-item link-tag" onclick="App.setQuery('55 inch 4K smart TV')">4K Smart TVs</button>
+        <button class="subnav-item link-tag" onclick="App.setQuery('Nike running shoes')">Nike Shoes</button>
+      </div>
+
+      <div class="subnav-right">
+        <span class="subnav-promo">⚡ Real Live Prices • Direct Merchant Navigation</span>
+      </div>
+    </nav>
+  </header>
+
+  <!-- =========================================================================
+       HERO BANNER & QUICK QUERY HINTS
+       ========================================================================= -->
+  <div class="amazon-hero-banner">
+    <div class="hero-gradient-overlay"></div>
+    <div class="hero-content-wrapper">
+      <div class="hero-brand-tag animate-slide-down">
+        <span>✨ NEXSHOP AUTONOMOUS SHOPPING AI</span>
+      </div>
+      <h2 class="hero-title animate-fade-in">
+        Real Products. Live Prices. <span class="text-amazon-orange">Compared Everywhere.</span>
+      </h2>
+      <p class="hero-desc animate-fade-in-delay">
+        Autonomous discovery across <strong>Amazon, Flipkart, Croma, Reliance Digital</strong>, and verified brand stores. English, Hindi & Hinglish supported.
+      </p>
+
+      <!-- Suggested Search Pills -->
+      <div class="hero-chips-row animate-fade-in-delay-2">
+        <span class="chips-label">Popular Searches:</span>
+        <button class="amazon-chip" onclick="App.setQuery('iPhone 15')">
+          <span>📱</span> iPhone 15
+        </button>
+        <button class="amazon-chip" onclick="App.setQuery('Redmi Note 10S')">
+          <span>📲</span> Redmi Note 10S
+        </button>
+        <button class="amazon-chip" onclick="App.setQuery('gaming laptop under 60000')">
+          <span>💻</span> Gaming Laptops &lt; ₹60k
+        </button>
+        <button class="amazon-chip" onclick="App.setQuery('Nike running shoes')">
+          <span>👟</span> Nike Shoes
+        </button>
+        <button class="amazon-chip" onclick="App.setQuery('mujhe 50000 ke andar 55 inch 4k tv chahiye')">
+          <span>🇮🇳</span> 55" TV Under ₹50k (Hindi)
+        </button>
+        <button class="amazon-chip" onclick="App.setQuery('cat logo t-shirt')">
+          <span>👕</span> Cat logo t-shirt
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MAIN SHOPPING LAYOUT
+       ========================================================================= -->
+  <main class="amazon-main-container">
+
+    <!-- Multi-Stage AI Reasoning Stepper (Animated) -->
+    <section id="ai-stepper-box" class="amazon-stepper-card" style="display: none;">
+      <div class="stepper-header-row">
+        <div class="stepper-title-box">
+          <span class="animated-ai-pulse-orb"></span>
+          <span class="stepper-heading">NexShop Autonomous Pipeline Active</span>
+        </div>
+        <span class="stepper-query-badge" id="stepper-current-query">Searching...</span>
+      </div>
+
+      <div class="stepper-progress-track">
+        <div class="progress-bar-fill" id="pipeline-progress-bar"></div>
+      </div>
+
+      <div class="stepper-stages-grid">
+        <div class="stage-step" id="stage-1">
+          <div class="stage-icon-circle">1</div>
+          <div class="stage-details">
+            <div class="stage-title">Intent Understanding</div>
+            <div class="stage-caption">Extracting constraints & budget</div>
+          </div>
+        </div>
+        <div class="stage-step" id="stage-2">
+          <div class="stage-icon-circle">2</div>
+          <div class="stage-details">
+            <div class="stage-title">Multi-Platform Discovery</div>
+            <div class="stage-caption">Scanning Amazon, Flipkart, Croma</div>
+          </div>
+        </div>
+        <div class="stage-step" id="stage-3">
+          <div class="stage-icon-circle">3</div>
+          <div class="stage-details">
+            <div class="stage-title">Price & Image Extraction</div>
+            <div class="stage-caption">Verifying real photos & URLs</div>
+          </div>
+        </div>
+        <div class="stage-step" id="stage-4">
+          <div class="stage-icon-circle">4</div>
+          <div class="stage-details">
+            <div class="stage-title">Price Comparison</div>
+            <div class="stage-caption">Matching offers across stores</div>
+          </div>
+        </div>
+        <div class="stage-step" id="stage-5">
+          <div class="stage-icon-circle">5</div>
+          <div class="stage-details">
+            <div class="stage-title">Best Deal Ranking</div>
+            <div class="stage-caption">Finalizing verified shortlist</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-Time Activity Log Stream -->
+      <div class="stepper-log-terminal">
+        <div class="terminal-title-bar">
+          <span>AI EVIDENCE & SOURCE STREAM</span>
+          <span class="terminal-blink-dot"></span>
+        </div>
+        <ul id="agent-log-list" class="agent-log-list"></ul>
+      </div>
+    </section>
+
+    <!-- Filter & Sort Strip (Amazon Style) -->
+    <section class="amazon-filter-strip" id="filter-section">
+      <div class="filter-strip-row">
+        
+        <!-- Platform Pills -->
+        <div class="filter-platforms-wrapper">
+          <span class="filter-strip-label">Filter Stores:</span>
+          <div class="platform-chips-container" id="platform-chips-container">
+            <button class="amazon-tab-btn active" data-platform="all" onclick="App.filterByPlatform('all')">All Stores</button>
+            <button class="amazon-tab-btn" data-platform="Amazon" onclick="App.filterByPlatform('Amazon')">Amazon</button>
+            <button class="amazon-tab-btn" data-platform="Flipkart" onclick="App.filterByPlatform('Flipkart')">Flipkart</button>
+            <button class="amazon-tab-btn" data-platform="Croma" onclick="App.filterByPlatform('Croma')">Croma</button>
+            <button class="amazon-tab-btn" data-platform="Reliance Digital" onclick="App.filterByPlatform('Reliance Digital')">Reliance Digital</button>
+          </div>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="filter-controls-wrapper">
+          <div class="amazon-select-group">
+            <label for="filter-budget">Max Budget:</label>
+            <div class="currency-input-box">
+              <span class="curr-symbol">₹</span>
+              <input type="number" id="filter-budget" class="amazon-input-sm" placeholder="Any" step="500" />
+            </div>
+          </div>
+
+          <div class="amazon-select-group">
+            <label for="filter-rating">Min Rating:</label>
+            <select id="filter-rating" class="amazon-select-sm">
+              <option value="">Avg. Customer Review</option>
+              <option value="4.0">4★ &amp; Up</option>
+              <option value="4.2">4.2★ &amp; Up</option>
+              <option value="4.5">4.5★ &amp; Up</option>
+            </select>
+          </div>
+
+          <div class="amazon-select-group">
+            <label for="filter-sort">Sort by:</label>
+            <select id="filter-sort" class="amazon-select-sm">
+              <option value="relevance">Featured / Best Match</option>
+              <option value="price_asc">Price: Low to High</option>
+              <option value="price_desc">Price: High to Low</option>
+              <option value="rating">Avg. Customer Review</option>
+              <option value="savings">Biggest Savings</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Global Cross-Platform Comparison Banner -->
+    <section id="comparison-banner-container"></section>
+
+    <!-- Results Header Bar -->
+    <div class="amazon-results-header" id="results-header-bar">
+      <div>
+        <h3 id="results-count-label" class="results-main-title">
+          Verified Live Products
+        </h3>
+        <span class="results-sub-text" id="results-subheading">Price and availability from live shopping platforms</span>
+      </div>
+
+      <!-- Quick Action: Side-by-side comparison floating bar -->
+      <div id="selection-compare-bar" class="amazon-compare-bar" style="display: none;">
+        <span id="selected-compare-count" class="compare-count-badge">0 items selected</span>
+        <button class="btn-amazon-compare" onclick="App.openSelectedComparisonModal()">
+          Compare Side-by-Side 📊
+        </button>
+      </div>
+    </div>
+
+    <!-- Products Grid (Amazon Product Cards) -->
+    <section id="products-grid" class="amazon-products-grid">
+      <!-- Injected by JavaScript -->
+    </section>
+
+  </main>
+
+  <!-- =========================================================================
+       AMAZON-STYLE FOOTER
+       ========================================================================= -->
+  <footer class="amazon-footer">
+    <div class="back-to-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'});">
+      Back to top ↑
+    </div>
+    <div class="footer-middle">
+      <div class="footer-col">
+        <h4>About NexShop</h4>
+        <p>NexShop is an autonomous AI shopping intelligence platform. We scan live web sources and shopping platforms in real-time with 0% mock data.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Verified Store Partners</h4>
+        <ul>
+          <li>Amazon India</li>
+          <li>Flipkart</li>
+          <li>Croma</li>
+          <li>Reliance Digital</li>
+          <li>Official Brand Stores</li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Security & Trust</h4>
+        <p>100% human-controlled purchases. NexShop never asks for OTP, CVV, or passwords. When you click Buy Now, you complete your purchase on the verified merchant platform.</p>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="footer-logo">
+        nex<span style="color:#ff9900;">shop</span>.in
+      </div>
+      <p>© 2026 NexShop AI Inc. All rights reserved. Zero fake products policy enforced.</p>
+    </div>
+  </footer>
+
+  <!-- Modal Dialog for Details, Specs, Reviews, and Multi-Product Comparison -->
+  <div id="main-modal" class="modal-overlay">
+    <div class="modal-content amazon-modal-box">
+      <button class="modal-close-btn" onclick="App.closeModal()" title="Close dialog">&times;</button>
+      <div id="modal-body-container"></div>
+    </div>
+  </div>
+
+  <!-- Toast Notifications Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Client JavaScript -->
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/components.js"></script>
+  <script src="/static/js/app.js"></script>
+
+</body>
+</html>
