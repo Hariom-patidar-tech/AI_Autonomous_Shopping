@@ -27,14 +27,46 @@ class HardFilterEngine:
         rejections: List[dict] = []
 
         for p in products:
+            if req.budget_max is not None or req.budget_min is not None:
+                if p.offers:
+                    eligible_offers = [
+                        offer for offer in p.offers
+                        if offer.currency.upper() == req.currency.upper()
+                        and (req.budget_max is None or offer.price <= req.budget_max)
+                        and (req.budget_min is None or offer.price >= req.budget_min)
+                    ]
+                    if not eligible_offers:
+                        rejections.append({
+                            "product": p.product_name,
+                            "reason": "No verified offer matches the requested currency and budget",
+                        })
+                        continue
+                    p.offers = eligible_offers
+                    best_offer = min(eligible_offers, key=lambda offer: offer.price)
+                    p.price = best_offer.price
+                    p.currency = best_offer.currency
+                    p.source = best_offer.platform
+                    p.url = best_offer.url
+                    p.source_url = best_offer.url
+                    p.seller = best_offer.seller
+                    p.image_url = best_offer.image_url or p.image_url
+                    p.availability = best_offer.availability
+                else:
+                    if p.price is None:
+                        rejections.append({
+                            "product": p.product_name,
+                            "reason": "Price is unavailable; cannot verify the requested budget",
+                        })
+                        continue
+                    if p.currency.upper() != req.currency.upper():
+                        rejections.append({
+                            "product": p.product_name,
+                            "reason": f"Price currency {p.currency} does not match requested currency {req.currency}",
+                        })
+                        continue
+
             # 1. Budget Max Filter (Deterministic)
             if req.budget_max is not None:
-                if p.price is None:
-                    rejections.append({
-                        "product": p.product_name,
-                        "reason": "Price is unavailable; cannot verify the maximum budget",
-                    })
-                    continue
                 if p.price > req.budget_max:
                     rejections.append({
                         "product": p.product_name,
