@@ -27,18 +27,42 @@ class ProductPageVerifier:
         if not valid or not URLVerifier.is_product_page_url(product_url):
             return None
 
+        # 1. First attempt with provided httpx client
         try:
             response = await client.get(product_url, timeout=10.0)
-            if response.status_code != 200 or "text/html" not in response.headers.get("content-type", "").lower():
-                return None
-            final_url = str(response.url)
-            final_valid, final_status, verified_url = URLVerifier.verify_url(final_url)
-            if not final_valid or not URLVerifier.is_product_page_url(verified_url):
-                return None
-            return cls.from_html(raw, response.text, verified_url, final_status or url_status)
+            if response.status_code == 200 and "text/html" in response.headers.get("content-type", "").lower():
+                is_captcha = "captcha" in response.text.lower() and "amazon" in product_url.lower()
+                if not is_captcha:
+                    final_url = str(response.url)
+                    final_valid, final_status, verified_url = URLVerifier.verify_url(final_url)
+                    if final_valid and URLVerifier.is_product_page_url(verified_url):
+                        prod = cls.from_html(raw, response.text, verified_url, final_status or url_status)
+                        if prod:
+                            return prod
         except (httpx.HTTPError, ValueError) as exc:
-            logger.debug("Retailer product page could not be verified (%s): %s", raw.url, exc)
-            return None
+            logger.debug("Retailer httpx fetch failed (%s): %s", raw.url, exc)
+
+        # 2. If httpx blocked (e.g. Amazon bot challenge / 503), attempt browser-impersonation via curl_cffi
+        try:
+            from curl_cffi import requests as c_requests
+            import asyncio
+            def _fetch_impersonated():
+                return c_requests.get(
+                    product_url,
+                    impersonate="chrome",
+                    timeout=10.0,
+                    headers={"Accept-Language": "en-IN,en;q=0.9"},
+                )
+            c_resp = await asyncio.to_thread(_fetch_impersonated)
+            if c_resp.status_code == 200:
+                final_url = str(c_resp.url or product_url)
+                final_valid, final_status, verified_url = URLVerifier.verify_url(final_url)
+                if final_valid and URLVerifier.is_product_page_url(verified_url):
+                    return cls.from_html(raw, c_resp.text, verified_url, final_status or url_status)
+        except Exception as exc:
+            logger.debug("Retailer impersonated fetch failed (%s): %s", raw.url, exc)
+
+        return None
 
     @classmethod
     def from_html(
@@ -53,18 +77,49 @@ class ProductPageVerifier:
 
         soup = BeautifulSoup(page_html, "html.parser")
         product_data = cls._find_product_schema(soup)
+        product_page_type = (cls._meta_content(soup, "og:type") or "").lower()
+
+        # Check if page is an Amazon, Flipkart, or known retailer product page with HTML elements
+        is_amazon = "amazon.in" in product_url or "amazon.com" in product_url
+        is_flipkart = "flipkart.com" in product_url
+
+        if not product_data and product_page_type != "product":
+            has_amz_elements = is_amazon and bool(soup.select_one("#productTitle, h1.a-size-large, .a-price"))
+            has_fk_elements = is_flipkart and bool(soup.select_one(".CxhGGd, h1, ._30jeq3"))
+            if not (has_amz_elements or has_fk_elements):
+                return None
+
         page_title = cls._meta_content(soup, "og:title", "twitter:title") or (soup.title.get_text(" ", strip=True) if soup.title else "")
-        product_name = cls._text(product_data.get("name")) or page_title or raw.title
+        if is_amazon:
+            amz_title = soup.select_one("#productTitle") or soup.select_one("h1.a-size-large")
+            if amz_title and amz_title.get_text(strip=True):
+                page_title = amz_title.get_text(strip=True)
+        elif is_flipkart:
+            fk_title = soup.select_one(".CxhGGd") or soup.select_one("h1")
+            if fk_title and fk_title.get_text(strip=True):
+                page_title = fk_title.get_text(strip=True)
+
+        product_name = cls._text(product_data.get("name")) if product_data else None
+        product_name = product_name or page_title or raw.title
         if not product_name or cls._is_generic_title(product_name):
             return None
 
-        image_value = product_data.get("image") or cls._meta_content(soup, "og:image", "twitter:image")
+        image_value = product_data.get("image") if product_data else cls._meta_content(soup, "og:image", "twitter:image")
         image_url = cls._first_image(image_value, product_url)
+        if not image_url and is_amazon:
+            amz_img = soup.select_one("#landingImage, #imgBlkFront, .a-dynamic-image")
+            if amz_img:
+                image_url = amz_img.get("data-old-hires") or amz_img.get("src")
+        elif not image_url and is_flipkart:
+            fk_img = soup.select_one("._396cs4, img._2r_T1I, img[class*='image']")
+            if fk_img:
+                image_url = fk_img.get("src")
+
         image_url = ImageVerifier.verify_image(image_url)
         if not image_url:
             return None
 
-        structured_offers = product_data.get("offers")
+        structured_offers = product_data.get("offers") if product_data else []
         if isinstance(structured_offers, dict):
             structured_offers = [structured_offers]
         if not isinstance(structured_offers, list):
@@ -75,6 +130,11 @@ class ProductPageVerifier:
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         for offer_data in structured_offers:
             if not isinstance(offer_data, dict):
+                continue
+            offer_types = offer_data.get("@type", [])
+            if isinstance(offer_types, str):
+                offer_types = [offer_types]
+            if not any(str(offer_type).lower().endswith("offer") and not str(offer_type).lower().endswith("aggregateoffer") for offer_type in offer_types):
                 continue
             price = cls._offer_price(offer_data)
             currency = str(offer_data.get("priceCurrency") or "").upper()
@@ -102,9 +162,34 @@ class ProductPageVerifier:
             meta_currency = cls._meta_content(soup, "product:price:currency", "og:price:currency", "itemprop:pricecurrency")
             price = cls._parse_price(meta_price)
             currency = (meta_currency or "").upper()
+
+            # HTML price extraction for Amazon
+            if price is None and is_amazon:
+                amz_price_el = soup.select_one(".a-price-whole, .a-price .a-offscreen, #priceblock_ourprice, #priceblock_dealprice")
+                if amz_price_el:
+                    price = cls._parse_price(amz_price_el.get_text(strip=True))
+                    currency = "INR" if "amazon.in" in product_url else "USD"
+
+            # HTML price extraction for Flipkart
+            if price is None and is_flipkart:
+                fk_price_el = soup.select_one("._30jeq3, ._16J0fT, div[class*='price']")
+                if fk_price_el:
+                    price = cls._parse_price(fk_price_el.get_text(strip=True))
+                    currency = "INR"
+
             if price is None or not re.fullmatch(r"[A-Z]{3}", currency):
                 return None
+
             availability = cls._availability(cls._meta_content(soup, "product:availability", "og:availability", "itemprop:availability"))
+            if availability is None and is_amazon:
+                avail_el = soup.select_one("#availability")
+                if avail_el:
+                    avail_text = avail_el.get_text().lower()
+                    if "in stock" in avail_text:
+                        availability = True
+                    elif "currently unavailable" in avail_text or "out of stock" in avail_text:
+                        availability = False
+
             verified_offers.append(
                 ProductOffer(
                     platform=retailer,
@@ -119,9 +204,9 @@ class ProductPageVerifier:
                 )
             )
 
-        brand_value = product_data.get("brand")
+        brand_value = product_data.get("brand") if product_data else None
         brand = cls._text(brand_value.get("name")) if isinstance(brand_value, dict) else cls._text(brand_value)
-        model = cls._text(product_data.get("model") or product_data.get("mpn") or product_data.get("sku"))
+        model = cls._text(product_data.get("model") or product_data.get("mpn") or product_data.get("sku")) if product_data else None
         inferred_brand, inferred_model = ProductPageExtractor._extract_brand_model(product_name)
         brand = brand or inferred_brand
         model = model or inferred_model
@@ -234,16 +319,17 @@ class ProductPageVerifier:
     def _retailer_name(page_url: str, fallback: str) -> str:
         host = (urlparse(page_url).hostname or "").lower().removeprefix("www.")
         names = {
-            "amazon": "Amazon", "flipkart": "Flipkart", "croma": "Croma",
-            "reliancedigital": "Reliance Digital", "walmart": "Walmart",
-            "bestbuy": "Best Buy", "ebay": "eBay", "boat-lifestyle": "boAt",
-            "gonoise": "Noise", "nykaa": "Nykaa", "myntra": "Myntra",
-            "ajio": "AJIO", "tatacliq": "Tata CLiQ",
+            "amazon.in": "Amazon", "amazon.com": "Amazon", "flipkart.com": "Flipkart",
+            "croma.com": "Croma", "reliancedigital.in": "Reliance Digital",
+            "walmart.com": "Walmart", "bestbuy.com": "Best Buy", "ebay.com": "eBay",
+            "boat-lifestyle.com": "boAt", "gonoise.com": "Noise", "fireboltt.com": "Fire-Boltt",
+            "boultaudio.com": "Boult", "ptron.in": "pTron", "nykaa.com": "Nykaa",
+            "myntra.com": "Myntra", "ajio.com": "AJIO", "tatacliq.com": "Tata CLiQ",
         }
-        for domain_part, name in names.items():
-            if domain_part in host:
+        for domain, name in names.items():
+            if host == domain or host.endswith("." + domain):
                 return name
-        return fallback or host
+        return host or fallback
 
     @staticmethod
     def _is_generic_title(title: str) -> bool:

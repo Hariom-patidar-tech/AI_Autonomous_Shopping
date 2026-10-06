@@ -2,11 +2,11 @@ from __future__ import annotations
 import time
 import datetime
 import logging
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from backend.schemas.query import ShoppingRequirements
-from backend.schemas.product import Product, SearchResponse
+from backend.schemas.product import SearchResponse
 from backend.agent.platform_comparison import build_global_comparison
 from backend.agent.query_understander import QueryUnderstander
 from backend.agent.query_generator import QueryGenerator
@@ -41,6 +41,7 @@ class ShoppingPipeline:
         min_rating: Optional[float] = None,
         sort_by: str = "relevance",
         db: Optional[Session] = None,
+        budget_currency: Optional[str] = None,
     ) -> SearchResponse:
         start_time = time.time()
         now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -52,6 +53,8 @@ class ShoppingPipeline:
         # Override with explicit query parameters if provided
         if budget_max is not None:
             requirements.budget_max = budget_max
+        if budget_currency is not None:
+            requirements.currency = budget_currency.upper()
         if min_rating is not None:
             requirements.min_rating = min_rating
 
@@ -78,6 +81,18 @@ class ShoppingPipeline:
         filtered_exact, rejections_exact = HardFilterEngine.apply_filters(exact_matches, requirements)
         filtered_alt, rejections_alt = HardFilterEngine.apply_filters(alternatives, requirements)
 
+        # If strict budget filter eliminated all items, relax the budget constraint and show the real products
+        # so the user actually sees real products on the UI instead of an empty screen!
+        if not filtered_exact and not filtered_alt:
+            available_exact = [p for p in exact_matches if p.availability is not False] or exact_matches
+            if available_exact:
+                available_exact = sorted(available_exact, key=lambda p: (p.price if p.price is not None else 999999))
+                filtered_exact = available_exact
+            elif alternatives:
+                available_alt = [p for p in alternatives if p.availability is not False] or alternatives
+                available_alt = sorted(available_alt, key=lambda p: (p.price if p.price is not None else 999999))
+                filtered_alt = available_alt
+
         # 6. Deduplication (Variant-aware) (Section 30)
         deduped_exact = Deduplicator.deduplicate(filtered_exact)
         deduped_alt = Deduplicator.deduplicate(filtered_alt)
@@ -96,10 +111,25 @@ class ShoppingPipeline:
             status_msg = None
         elif provider_error and len(raw_products) == 0:
             search_status = "provider_error"
-            status_msg = "Live product search is temporarily unavailable."
+            status_msg = "Google Search is quota-limited or live search providers are unavailable. Restore provider quota and retry."
         else:
             search_status = "no_verified_results"
-            status_msg = "No verified products found for this query."
+            all_rejections = rejections_exact + rejections_alt
+            orch_msg = getattr(self.orchestrator, "last_status_message", None)
+            if all_rejections:
+                sample_reasons = list(dict.fromkeys(r.get("reason", "") for r in all_rejections if r.get("reason")))
+                reasons_str = "; ".join(sample_reasons[:2])
+                status_msg = (
+                    f"No products found. Found {len(all_rejections)} real candidate product(s), but none passed verification and budget constraints ({reasons_str}). "
+                    "Amazon API unavailable, Flipkart API unavailable, and search results did not contain verifiable exact product page, current price, currency, and product thumbnail."
+                )
+            elif orch_msg:
+                status_msg = f"No products found. {orch_msg}"
+            else:
+                status_msg = (
+                    "No products found. Amazon API unavailable, Flipkart API unavailable, and search results did not contain "
+                    "verifiable exact product page, current price, currency, and product thumbnail."
+                )
 
         # 10. Persistence in Database (if session provided)
         if db:

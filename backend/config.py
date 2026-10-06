@@ -20,6 +20,21 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     SEARCH_PROVIDER: str = os.getenv("SEARCH_PROVIDER", "google")
 
+    # Amazon PA-API / Creators API Credentials
+    AMAZON_ACCESS_KEY: str = os.getenv("AMAZON_ACCESS_KEY", "")
+    AMAZON_SECRET_KEY: str = os.getenv("AMAZON_SECRET_KEY", "")
+    AMAZON_ASSOCIATE_TAG: str = os.getenv("AMAZON_ASSOCIATE_TAG", "")
+    AMAZON_HOST: str = os.getenv("AMAZON_HOST", "webservices.amazon.in")
+    AMAZON_REGION: str = os.getenv("AMAZON_REGION", "eu-west-1")
+    AMAZON_CREATOR_TOKEN: str = os.getenv("AMAZON_CREATOR_TOKEN", "")
+
+    # Flipkart Affiliate API Credentials
+    FLIPKART_AFFILIATE_ID: str = os.getenv("FLIPKART_AFFILIATE_ID", "")
+    FLIPKART_AFFILIATE_TOKEN: str = os.getenv("FLIPKART_AFFILIATE_TOKEN", "")
+
+    # Bing Search API Credentials
+    BING_SEARCH_API_KEY: str = os.getenv("BING_SEARCH_API_KEY", "")
+
     # Database
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",

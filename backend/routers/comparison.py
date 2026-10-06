@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import ProductRow
-from backend.schemas.product import Product, ProductOffer
 
 router = APIRouter(prefix="/api/comparison", tags=["Comparison"])
 

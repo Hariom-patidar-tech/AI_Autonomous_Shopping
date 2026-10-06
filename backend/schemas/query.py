@@ -28,5 +28,6 @@ class SearchQueryRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Natural language search query")
     user_id: Optional[int] = 1
     budget_max: Optional[float] = None
+    budget_currency: Optional[str] = Field(None, min_length=3, max_length=3, pattern=r"^[A-Z]{3}$")
     min_rating: Optional[float] = None
     sort_by: Optional[str] = "relevance"  # relevance | price_asc | price_desc | rating

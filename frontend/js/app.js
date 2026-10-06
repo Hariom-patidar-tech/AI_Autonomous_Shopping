@@ -20,7 +20,10 @@ const App = {
 
   init() {
     this.bindEvents();
-    this.renderEmpty("Search for a product to see verified retailer prices and product pages.");
+    this.renderEmpty("Search for a product to see verified retailer prices and product pages.", {
+      title: "Ready to search",
+      countLabel: "Search ready",
+    });
   },
 
   bindEvents() {
@@ -48,11 +51,15 @@ const App = {
 
     // Filter event listeners
     const budgetInput = document.getElementById("filter-budget");
+    const budgetCurrency = document.getElementById("filter-currency");
     const ratingInput = document.getElementById("filter-rating");
     const sortSelect = document.getElementById("filter-sort");
 
     if (budgetInput) {
-      budgetInput.addEventListener("change", () => this.applyClientFiltersAndSort());
+      budgetInput.addEventListener("change", () => this.executeSearch(this.state.currentQuery));
+    }
+    if (budgetCurrency) {
+      budgetCurrency.addEventListener("change", () => this.executeSearch(this.state.currentQuery));
     }
     if (ratingInput) {
       ratingInput.addEventListener("change", () => this.applyClientFiltersAndSort());
@@ -94,152 +101,85 @@ const App = {
     }
 
     this.updateSearchBtnLoading(true);
-    this.startAiStepper(query);
+
+    const gridContainer = document.getElementById("products-grid");
+    const countLabel = document.getElementById("results-count-label");
+    const bannerContainer = document.getElementById("comparison-banner-container");
+    if (bannerContainer) bannerContainer.innerHTML = "";
+    if (countLabel) countLabel.textContent = `Searching for "${query}"...`;
+    if (gridContainer) {
+      gridContainer.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 4rem 1.5rem; background: #ffffff; border: 1px solid #d5d9d9; border-radius: 8px;">
+          <div class="spinner" style="width: 36px; height: 36px; border: 3px solid #f3f3f3; border-top: 3px solid #f08804; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem;"></div>
+          <h3 style="font-size: 1.15rem; color: #0f1111; font-weight: 600; margin-bottom: 0.35rem;">Searching stores for "${query}"</h3>
+          <p style="font-size: 0.88rem; color: #565959;">Finding real products and comparing prices...</p>
+        </div>
+      `;
+    }
 
     const budgetMax = document.getElementById("filter-budget")?.value || null;
+    const budgetCurrency = document.getElementById("filter-currency")?.value || "INR";
     const minRating = document.getElementById("filter-rating")?.value || null;
     const sortBy = document.getElementById("filter-sort")?.value || "relevance";
 
     try {
-      this.advanceStepperStage(1);
-      this.addAgentLog(`Intent Extraction: Analyzing query "${query}"`);
+      const data = await ShoppingAPI.searchProducts(query, budgetMax, budgetCurrency, minRating, sortBy);
 
-      setTimeout(() => {
-        if (this.state.isLoading) {
-          this.advanceStepperStage(2);
-          this.addAgentLog(`Multi-Platform Search: Querying Amazon, Flipkart, Croma, Reliance Digital`);
-        }
-      }, 450);
-
-      setTimeout(() => {
-        if (this.state.isLoading) {
-          this.advanceStepperStage(3);
-          this.addAgentLog(`Price & Image Verification: Decoding store URLs and high-res photos`);
-        }
-      }, 950);
-
-      const data = await ShoppingAPI.searchProducts(query, budgetMax, minRating, sortBy);
-
-      this.advanceStepperStage(4);
-      this.addAgentLog(`Price Comparison: Matched ${data.verified_results || 0} listings across ${data.sources?.join(", ") || "Retail Stores"}`);
-
-      this.advanceStepperStage(5);
-      this.addAgentLog(`Best Deal Ranking: Verified live options with 0% mock data`);
-
-      this.state.products = data.products || [];
-      this.state.alternatives = data.alternatives || [];
-      this.state.comparisonSummary = data.comparison_summary || null;
-      this.state.platformComparison = data.platform_comparison || null;
-
-      // Update cart count
-      const cartCountEl = document.getElementById("header-cart-count");
-      if (cartCountEl) cartCountEl.textContent = (this.state.products.length + this.state.alternatives.length);
-
-      // Extract unique platforms
-      this.extractAvailablePlatforms();
-      this.renderPlatformChips();
+      this.consumeSearchResponse(data);
 
       // Check for search status
       if (data.search_status === "provider_error") {
-        this.completeAiStepper();
-        this.renderEmpty(data.message || "Live product search is temporarily unavailable. Please try again.");
+        this.renderEmpty(data.message || "The live search provider is unavailable. Check its quota and try again.", {
+          title: "Live search unavailable",
+          countLabel: "Search unavailable",
+          retry: true,
+        });
         return;
       }
 
       if (this.state.products.length === 0 && this.state.alternatives.length === 0) {
-        this.completeAiStepper();
-        this.renderEmpty("No verified products found.<br/><br/>Try:<br/>• a different product name<br/>• a broader search term<br/>• removing one filter");
+        this.renderEmpty(data.message || "No products found", {
+          title: "No products found",
+          countLabel: "0 products found",
+        });
         return;
       }
 
-      setTimeout(() => {
-        this.completeAiStepper();
-        this.applyClientFiltersAndSort();
-      }, 350);
+      this.applyClientFiltersAndSort();
 
     } catch (err) {
       console.error("Search execution failed:", err);
-      this.completeAiStepper();
       Components.showToast(`Search error: ${err.message}`, "warning");
-      this.renderEmpty("Live product search is temporarily unavailable. Please try again.");
+      this.renderEmpty(`Live search request failed: ${err.message}`, {
+        title: "Search request failed",
+        countLabel: "Search unavailable",
+        retry: true,
+      });
     } finally {
       this.state.isLoading = false;
       this.updateSearchBtnLoading(false);
     }
   },
 
-  /**
-   * AI Stepper Controls with Progress Animation
-   */
-  startAiStepper(query) {
-    const box = document.getElementById("ai-stepper-box");
-    const queryTag = document.getElementById("stepper-current-query");
-    const logList = document.getElementById("agent-log-list");
-    const progressBar = document.getElementById("pipeline-progress-bar");
+  consumeSearchResponse(data) {
+    this.state.products = Array.isArray(data?.products) ? data.products : [];
+    this.state.alternatives = Array.isArray(data?.alternatives) ? data.alternatives : [];
+    this.state.comparisonSummary = data?.comparison_summary || null;
+    this.state.platformComparison = data?.platform_comparison || null;
 
-    if (box) box.style.display = "block";
-    if (queryTag) queryTag.textContent = `Target: "${query}"`;
-    if (logList) logList.innerHTML = "";
-    if (progressBar) progressBar.style.width = "15%";
+    const cartCountEl = document.getElementById("header-cart-count");
+    if (cartCountEl) cartCountEl.textContent = this.state.products.length + this.state.alternatives.length;
 
-    for (let i = 1; i <= 5; i++) {
-      const stage = document.getElementById(`stage-${i}`);
-      if (stage) {
-        stage.className = "stage-step";
-        const icon = stage.querySelector(".stage-icon-circle");
-        if (icon) icon.textContent = i;
-      }
-    }
+    this.extractAvailablePlatforms();
+    this.renderPlatformChips();
+    return this.state.products.length + this.state.alternatives.length;
   },
 
-  advanceStepperStage(stageNum) {
-    const progressBar = document.getElementById("pipeline-progress-bar");
-    if (progressBar) {
-      progressBar.style.width = `${Math.min(stageNum * 20, 95)}%`;
-    }
-
-    for (let i = 1; i <= 5; i++) {
-      const stage = document.getElementById(`stage-${i}`);
-      if (!stage) continue;
-      const icon = stage.querySelector(".stage-icon-circle");
-
-      if (i < stageNum) {
-        stage.className = "stage-step completed";
-        if (icon) icon.textContent = "✓";
-      } else if (i === stageNum) {
-        stage.className = "stage-step active";
-        if (icon) icon.textContent = i;
-      } else {
-        stage.className = "stage-step";
-        if (icon) icon.textContent = i;
-      }
-    }
-  },
-
-  completeAiStepper() {
-    const progressBar = document.getElementById("pipeline-progress-bar");
-    if (progressBar) progressBar.style.width = "100%";
-
-    for (let i = 1; i <= 5; i++) {
-      const stage = document.getElementById(`stage-${i}`);
-      if (stage) {
-        stage.className = "stage-step completed";
-        const icon = stage.querySelector(".stage-icon-circle");
-        if (icon) icon.textContent = "✓";
-      }
-    }
-  },
-
-  addAgentLog(text) {
-    const list = document.getElementById("agent-log-list");
-    if (list) {
-      const item = document.createElement("li");
-      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      item.innerHTML = `<span style="color:#febd69; margin-right:4px;">[${timeStr}]</span> <span>${text}</span>`;
-      list.appendChild(item);
-      list.scrollTop = list.scrollHeight;
-    }
-  },
+  // Stepper helper stubs (stepper UI removed)
+  startAiStepper(query) {},
+  advanceStepperStage(stageNum) {},
+  completeAiStepper() {},
+  addAgentLog(text) {},
 
   /**
    * Extract platforms from discovered live products
@@ -249,10 +189,12 @@ const App = {
     const allItems = [...this.state.products, ...this.state.alternatives];
 
     for (const p of allItems) {
-      if (p.source) platforms.add(p.source);
+      const plat = p.retailer || p.source;
+      if (plat) platforms.add(plat);
       if (p.offers) {
         for (const off of p.offers) {
-          if (off.platform) platforms.add(off.platform);
+          const offPlat = off.retailer || off.platform;
+          if (offPlat) platforms.add(offPlat);
         }
       }
     }
@@ -302,8 +244,9 @@ const App = {
     const filterItem = (p) => {
       // Platform check
       if (selectedPlat !== "all") {
-        const hasSource = p.source && p.source.toLowerCase().includes(selectedPlat);
-        const hasOffer = p.offers && p.offers.some(o => o.platform && o.platform.toLowerCase().includes(selectedPlat));
+        const plat = (p.retailer || p.source || "").toLowerCase();
+        const hasSource = plat.includes(selectedPlat);
+        const hasOffer = p.offers && p.offers.some(o => (o.retailer || o.platform || "").toLowerCase().includes(selectedPlat));
         if (!hasSource && !hasOffer) return false;
       }
       // Budget check
@@ -365,12 +308,15 @@ const App = {
     }
 
     if (totalCount === 0) {
-      this.renderEmpty("No verified products match the current filters.<br/><br/>Try adjusting your maximum budget, minimum rating, or store platform.");
+      this.renderEmpty("Try adjusting the budget, rating, or store filters.", {
+        title: "No offers match these filters",
+        countLabel: "0 matching offers",
+      });
       return;
     }
 
     let html = products.map(p => {
-      const pId = p.id != null ? p.id : (p.product_name || "item").replace(/[^a-zA-Z0-9]/g, "").slice(0, 15);
+      const pId = p.product_id != null ? p.product_id : (p.id != null ? p.id : (p.name || p.product_name || "item").replace(/[^a-zA-Z0-9]/g, "").slice(0, 15));
       const isSel = this.state.selectedProductIds.has(String(pId));
       return Components.renderProductCard(p, isSel);
     }).join("");
@@ -385,7 +331,7 @@ const App = {
         </div>
       `;
       html += alternatives.map(p => {
-        const pId = p.id != null ? p.id : (p.product_name || "item").replace(/[^a-zA-Z0-9]/g, "").slice(0, 15);
+        const pId = p.product_id != null ? p.product_id : (p.id != null ? p.id : (p.name || p.product_name || "item").replace(/[^a-zA-Z0-9]/g, "").slice(0, 15));
         const isSel = this.state.selectedProductIds.has(String(pId));
         return Components.renderProductCard(p, isSel);
       }).join("");
@@ -397,22 +343,30 @@ const App = {
   /**
    * Empty / Failure State Renderer
    */
-  renderEmpty(message) {
+  renderEmpty(message, options = {}) {
     const gridContainer = document.getElementById("products-grid");
     const countLabel = document.getElementById("results-count-label");
     const bannerContainer = document.getElementById("comparison-banner-container");
+    const title = options.title || "No verified products found";
 
     if (bannerContainer) bannerContainer.innerHTML = "";
-    if (countLabel) countLabel.textContent = "0 results found";
+    if (countLabel) countLabel.textContent = options.countLabel || "0 verified offers";
 
     if (gridContainer) {
       gridContainer.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 4.5rem 1.5rem; background: #ffffff; border: 1px solid #d5d9d9; border-radius: 8px;">
           <div style="font-size: 3rem; margin-bottom: 0.75rem;">📦</div>
-          <h3 style="font-size: 1.35rem; color: #0f1111; font-family: var(--font-heading); margin-bottom: 0.5rem;">No Results Found on NexShop</h3>
+          <h3 style="font-size: 1.35rem; color: #0f1111; font-family: var(--font-heading); margin-bottom: 0.5rem;">${title}</h3>
           <p style="max-width: 480px; margin: 0 auto; font-size: 0.95rem; color: #565959; line-height: 1.5;">${message}</p>
+          ${options.retry ? `<button type="button" id="retry-search-btn" class="btn-sm btn-view" style="margin-top:1rem;">Retry search</button>` : ""}
         </div>
       `;
+      const retryButton = document.getElementById("retry-search-btn");
+      if (retryButton) {
+        retryButton.addEventListener("click", () => {
+          if (this.state.currentQuery) this.executeSearch(this.state.currentQuery);
+        });
+      }
     }
   },
 

@@ -1,10 +1,11 @@
 from __future__ import annotations
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import ProductRow, ProductOfferRow
+from backend.models import ProductRow
 from backend.schemas.product import Product, ProductOffer, SearchResponse, GlobalComparisonResponse
 from backend.schemas.query import SearchQueryRequest
 from backend.agent.shopping_pipeline import ShoppingPipeline
@@ -12,24 +13,33 @@ from backend.agent.platform_comparison import build_global_comparison
 
 router = APIRouter(prefix="/api/products", tags=["Products"])
 pipeline = ShoppingPipeline()
+logger = logging.getLogger("shopping_agent.api.products")
+
+
+def _log_search_response(response: SearchResponse) -> SearchResponse:
+    logger.info("Final product search JSON: %s", response.model_dump_json())
+    return response
 
 
 @router.get("/search", response_model=SearchResponse)
 async def search_products_get(
     query: str = Query(..., min_length=1, description="Natural language search query"),
     budget_max: Optional[float] = Query(None, description="Maximum budget filter"),
+    budget_currency: Optional[str] = Query(None, min_length=3, max_length=3, pattern=r"^[A-Z]{3}$"),
     min_rating: Optional[float] = Query(None, description="Minimum rating filter"),
     sort_by: str = Query("relevance", description="relevance | price_asc | price_desc | rating"),
     db: Session = Depends(get_db),
 ):
     """Universal product search endpoint accepting any natural language or Hindi/Hinglish query."""
-    return await pipeline.run(
+    response = await pipeline.run(
         query=query,
         budget_max=budget_max,
+        budget_currency=budget_currency,
         min_rating=min_rating,
         sort_by=sort_by,
         db=db,
     )
+    return _log_search_response(response)
 
 
 @router.post("/search", response_model=SearchResponse)
@@ -38,14 +48,16 @@ async def search_products_post(
     db: Session = Depends(get_db),
 ):
     """POST endpoint for product search."""
-    return await pipeline.run(
+    response = await pipeline.run(
         query=req.query,
         user_id=req.user_id,
         budget_max=req.budget_max,
+        budget_currency=req.budget_currency,
         min_rating=req.min_rating,
         sort_by=req.sort_by or "relevance",
         db=db,
     )
+    return _log_search_response(response)
 
 
 @router.get("/compare-platforms", response_model=GlobalComparisonResponse)

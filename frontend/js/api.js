@@ -4,9 +4,12 @@
 const API_BASE = "";
 
 const ShoppingAPI = {
-  async searchProducts(query, budgetMax = null, minRating = null, sortBy = "relevance") {
+  async searchProducts(query, budgetMax = null, budgetCurrency = "INR", minRating = null, sortBy = "relevance") {
     const params = new URLSearchParams({ query, sort_by: sortBy });
-    if (budgetMax) params.append("budget_max", budgetMax);
+    if (budgetMax != null && budgetMax !== "") {
+      params.append("budget_max", budgetMax);
+      params.append("budget_currency", budgetCurrency);
+    }
     if (minRating) params.append("min_rating", minRating);
 
     const res = await fetch(`${API_BASE}/api/products/search?${params.toString()}`);

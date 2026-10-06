@@ -1,5 +1,4 @@
 from __future__ import annotations
-import os
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path

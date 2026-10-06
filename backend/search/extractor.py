@@ -3,8 +3,7 @@ import re
 import datetime
 import logging
 from typing import Optional, Dict, Any, List, Tuple
-from urllib.parse import urlparse
-from backend.search.base import RawSearchResult, SearchCandidate
+from backend.search.base import RawSearchResult
 from backend.search.verifier import URLVerifier, ImageVerifier
 from backend.schemas.product import Product, ProductOffer
 

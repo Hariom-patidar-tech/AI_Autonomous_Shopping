@@ -2,7 +2,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional, List
 from urllib.parse import urlparse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class RawSearchResult(BaseModel):

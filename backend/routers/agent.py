@@ -70,6 +70,7 @@ async def run_agent_workflow(
         user_id=req.user_id,
         db=db,
     )
+    logger.info("Final normalized JSON response: %s", search_res.model_dump_json())
     return AgentRunResponse(
         action_taken="product_search",
         message=f"Found {search_res.total_results} matching products from {len(search_res.sources)} live web sources.",

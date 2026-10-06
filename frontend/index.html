@@ -62,7 +62,7 @@
               type="text"
               id="search-input"
               class="nav-input"
-              placeholder="Search NexShop for any product (e.g. iPhone 15, Redmi Note 10S, gaming laptop, Nike shoes)..."
+              placeholder="Search for any product or model..."
               autocomplete="off"
               required
             />
@@ -122,10 +122,6 @@
         <button class="subnav-item" onclick="App.filterByPlatform('Reliance Digital')">
           <span class="store-dot store-reliance"></span> Reliance Digital
         </button>
-        <span class="subnav-separator">|</span>
-        <button class="subnav-item link-tag" onclick="App.setQuery('gaming laptop under 60000')">Laptops Under ₹60k</button>
-        <button class="subnav-item link-tag" onclick="App.setQuery('55 inch 4K smart TV')">4K Smart TVs</button>
-        <button class="subnav-item link-tag" onclick="App.setQuery('Nike running shoes')">Nike Shoes</button>
       </div>
 
       <div class="subnav-right">
@@ -150,28 +146,6 @@
         Autonomous discovery across <strong>Amazon, Flipkart, Croma, Reliance Digital</strong>, and verified brand stores. English, Hindi & Hinglish supported.
       </p>
 
-      <!-- Suggested Search Pills -->
-      <div class="hero-chips-row animate-fade-in-delay-2">
-        <span class="chips-label">Popular Searches:</span>
-        <button class="amazon-chip" onclick="App.setQuery('iPhone 15')">
-          <span>📱</span> iPhone 15
-        </button>
-        <button class="amazon-chip" onclick="App.setQuery('Redmi Note 10S')">
-          <span>📲</span> Redmi Note 10S
-        </button>
-        <button class="amazon-chip" onclick="App.setQuery('gaming laptop under 60000')">
-          <span>💻</span> Gaming Laptops &lt; ₹60k
-        </button>
-        <button class="amazon-chip" onclick="App.setQuery('Nike running shoes')">
-          <span>👟</span> Nike Shoes
-        </button>
-        <button class="amazon-chip" onclick="App.setQuery('mujhe 50000 ke andar 55 inch 4k tv chahiye')">
-          <span>🇮🇳</span> 55" TV Under ₹50k (Hindi)
-        </button>
-        <button class="amazon-chip" onclick="App.setQuery('cat logo t-shirt')">
-          <span>👕</span> Cat logo t-shirt
-        </button>
-      </div>
     </div>
   </div>
 
@@ -180,67 +154,7 @@
        ========================================================================= -->
   <main class="amazon-main-container">
 
-    <!-- Multi-Stage AI Reasoning Stepper (Animated) -->
-    <section id="ai-stepper-box" class="amazon-stepper-card" style="display: none;">
-      <div class="stepper-header-row">
-        <div class="stepper-title-box">
-          <span class="animated-ai-pulse-orb"></span>
-          <span class="stepper-heading">NexShop Autonomous Pipeline Active</span>
-        </div>
-        <span class="stepper-query-badge" id="stepper-current-query">Searching...</span>
-      </div>
 
-      <div class="stepper-progress-track">
-        <div class="progress-bar-fill" id="pipeline-progress-bar"></div>
-      </div>
-
-      <div class="stepper-stages-grid">
-        <div class="stage-step" id="stage-1">
-          <div class="stage-icon-circle">1</div>
-          <div class="stage-details">
-            <div class="stage-title">Intent Understanding</div>
-            <div class="stage-caption">Extracting constraints & budget</div>
-          </div>
-        </div>
-        <div class="stage-step" id="stage-2">
-          <div class="stage-icon-circle">2</div>
-          <div class="stage-details">
-            <div class="stage-title">Multi-Platform Discovery</div>
-            <div class="stage-caption">Scanning Amazon, Flipkart, Croma</div>
-          </div>
-        </div>
-        <div class="stage-step" id="stage-3">
-          <div class="stage-icon-circle">3</div>
-          <div class="stage-details">
-            <div class="stage-title">Price & Image Extraction</div>
-            <div class="stage-caption">Verifying real photos & URLs</div>
-          </div>
-        </div>
-        <div class="stage-step" id="stage-4">
-          <div class="stage-icon-circle">4</div>
-          <div class="stage-details">
-            <div class="stage-title">Price Comparison</div>
-            <div class="stage-caption">Matching offers across stores</div>
-          </div>
-        </div>
-        <div class="stage-step" id="stage-5">
-          <div class="stage-icon-circle">5</div>
-          <div class="stage-details">
-            <div class="stage-title">Best Deal Ranking</div>
-            <div class="stage-caption">Finalizing verified shortlist</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Real-Time Activity Log Stream -->
-      <div class="stepper-log-terminal">
-        <div class="terminal-title-bar">
-          <span>AI EVIDENCE & SOURCE STREAM</span>
-          <span class="terminal-blink-dot"></span>
-        </div>
-        <ul id="agent-log-list" class="agent-log-list"></ul>
-      </div>
-    </section>
 
     <!-- Filter & Sort Strip (Amazon Style) -->
     <section class="amazon-filter-strip" id="filter-section">
@@ -263,8 +177,16 @@
           <div class="amazon-select-group">
             <label for="filter-budget">Max Budget:</label>
             <div class="currency-input-box">
-              <span class="curr-symbol">₹</span>
-              <input type="number" id="filter-budget" class="amazon-input-sm" placeholder="Any" step="500" />
+              <input type="number" id="filter-budget" class="amazon-input-sm" placeholder="Any" step="100" />
+              <select id="filter-currency" class="amazon-select-sm" aria-label="Budget currency">
+                <option value="INR" selected>INR</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="CAD">CAD</option>
+                <option value="AUD">AUD</option>
+                <option value="JPY">JPY</option>
+              </select>
             </div>
           </div>
 

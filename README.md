@@ -92,7 +92,7 @@ PORT=8000
 GEMINI_API_KEY=your_gemini_api_key_here
 
 # PostgreSQL Database (automatically falls back to SQLite if unreachable)
-DATABASE_URL=postgresql://postgres:mypostgresql@localhost:5432/shopping_agent
+DATABASE_URL=postgresql://postgres:mypostgresqllll@localhost:5432/shopping_agent
 FALLBACK_SQLITE_URL=sqlite:///shopping_agent.db
 ```
 
@@ -110,10 +110,10 @@ python -m pytest -v
 ### 5. Launch the Application
 Start the FastAPI server with Uvicorn:
 ```bash
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
-Open your browser at **[http://localhost:8000/](http://localhost:8000/)**.
+Open your browser at **[http://localhost:8001/](http://localhost:8000/)**.
 
 ---
 
@@ -135,6 +135,7 @@ Open your browser at **[http://localhost:8000/](http://localhost:8000/)**.
 
 ## 🔒 Security & Safety Guarantees
 
-1. **Anti-Hallucination Policy**: Every product, offer, price, seller, and URL returned must come directly from verified live search grounding or live web scraping. The system will **never invent a product, retailer URL, or price**, and never falls back to mock or dummy data.
-2. **Zero Financial Secret Handling**: Under no circumstances does the agent store, request, or manipulate payment card CVVs, one-time passwords (OTPs), or online banking credentials.
-3. **Verified Link Out**: All checkout actions redirect the user directly to the official merchant domain with `rel="noopener noreferrer"`.
+1. **Anti-Hallucination Policy**: Search snippets discover candidate URLs only. A candidate is shown only after its HTTPS product-detail page supplies product-specific structured data, an exact offer price and ISO currency, and a product image. Home, category, search, aggregate-price, missing-price, and missing-image results are rejected. If live sources cannot verify offers, the API returns an empty result rather than mock, dummy, or fabricated data.
+2. **Currency-Safe Comparison**: Offers are compared only when their currencies match. Different currencies are shown in their source currency; no exchange rate or converted price is invented.
+3. **Zero Financial Secret Handling**: Under no circumstances does the agent store, request, or manipulate payment card CVVs, one-time passwords (OTPs), or online banking credentials.
+4. **Verified Link Out**: Buy Now links open the exact product-detail URL associated with that retailer offer with `rel="noopener noreferrer"`.

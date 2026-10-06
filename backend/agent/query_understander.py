@@ -2,7 +2,7 @@ from __future__ import annotations
 import re
 import json
 import logging
-from typing import Optional, List
+from typing import Optional
 from google import genai
 from google.genai import types
 from backend.config import settings
@@ -89,7 +89,7 @@ class QueryUnderstander:
             '  "model": "extracted specific model or null",\n'
             '  "budget_min": numeric or null,\n'
             '  "budget_max": numeric or null,\n'
-            '  "currency": "INR",\n'
+            '  "currency": "ISO-4217 currency code inferred from the query, otherwise INR",\n'
             '  "min_rating": numeric rating (e.g. 4.0) or null,\n'
             '  "intent": "exact_product_search | product_search | comparison | cheapest_search",\n'
             '  "use_case": "extracted use case like coding, gaming, running or null",\n'
@@ -109,6 +109,15 @@ class QueryUnderstander:
             except Exception:
                 b_max = None
 
+        explicit_currency = re.search(
+            r"(?:₹|\bRs\.?\b|\bINR\b|US\$|\bUSD\b|\$|\bGBP\b|£|\bEUR\b|€|\bCAD\b|\bAUD\b|\bJPY\b|¥)",
+            query,
+            re.IGNORECASE,
+        )
+        llm_currency = str(data.get("currency") or "INR").upper()
+        if not re.fullmatch(r"[A-Z]{3}", llm_currency):
+            llm_currency = "INR"
+
         return ShoppingRequirements(
             raw_query=query,
             category=data.get("category"),
@@ -117,7 +126,7 @@ class QueryUnderstander:
             model=data.get("model"),
             budget_min=float(data["budget_min"]) if data.get("budget_min") is not None else None,
             budget_max=b_max,
-            currency="INR",
+            currency=self._detect_currency(query.lower()) if explicit_currency else llm_currency,
             min_rating=float(data["min_rating"]) if data.get("min_rating") is not None else None,
             intent=data.get("intent", "product_search"),
             use_case=data.get("use_case"),
@@ -159,19 +168,36 @@ class QueryUnderstander:
     def _extract_deterministic(self, query: str, is_hindi: bool) -> ShoppingRequirements:
         """Deterministic regex-based fallback extractor for English & Hinglish."""
         lower = query.lower()
+        clean_num_query = lower.replace(",", "")
 
-        # 1. Budget extraction (handles "50000 ke andar" and "under 50000")
+        # 1. Budget extraction (handles "1000rs", "₹1000", "Rs 1000", "1,000 INR", "under 1000", "below ₹1,000", "under $250")
         budget_max = None
-        # Pattern A: Number before phrase (e.g. "50000 ke andar", "60k tak")
-        currency_prefix = r"(?:₹|Rs\.?|INR|US\$|USD|\$|GBP|£|EUR|€|CAD|AUD|JPY|¥)?"
-        currency_suffix = r"(?:rs\.?|inr|rupees?|usd|gbp|eur|cad|aud|jpy)?"
-        b_before = re.search(r"\b([\d,]+)\s*(k|lakh)?\s*" + currency_suffix + r"\s*(?:ke\s*andar|tak|se\s*kam|ke\s*niche)\b", lower)
-        # Pattern B: Number after phrase (e.g. "under 50000", "below 60k", "ke andar 50000")
-        b_after = re.search(r"(?:under|below|less than|within|ke\s*andar|tak|me|mein)\s*" + currency_prefix + r"\s*([\d,]+)\s*(k|lakh)?\s*" + currency_suffix + r"\b", lower)
+        currency_code = self._detect_currency(lower)
 
-        target_match = b_before or b_after
+        # Pattern A: Number before phrase (e.g. "50000 ke andar", "1000 tak", "60k tak")
+        b_before = re.search(
+            r"\b([\d]+(?:\.\d+)?)\s*(k|lakh)?\s*(?:₹|rs\.?|inr|rupees?)?\s*(?:ke\s*andar|tak|se\s*kam|ke\s*niche)\b",
+            clean_num_query,
+        )
+        # Pattern B: Standalone currency prefix + number (e.g. "₹1000", "Rs 1000", "Rs. 1,000", "$250")
+        b_curr_pre = re.search(
+            r"(?:₹|\brs\.?|\brupees?|\$|\busd\b|\bgbp\b|£|\beur\b|€|\bcad\b|\baud\b|\bjpy\b|¥)\s*([\d]+(?:\.\d+)?)\s*(k|lakh)?\b",
+            clean_num_query,
+        )
+        # Pattern C: Number + currency suffix (e.g. "1000rs", "1,000 inr", "1000 rupees", "1000 rs")
+        b_curr_post = re.search(
+            r"\b([\d]+(?:\.\d+)?)\s*(k|lakh)?\s*(?:rs|inr|rupees)\b",
+            clean_num_query,
+        )
+        # Pattern D: Number after phrase (e.g. "under 1000", "below ₹1,000", "within 1000rs", "under $250")
+        b_after = re.search(
+            r"(?:under|below|less\s+than|within)\s*(?:₹|rs\.?|inr|rupees?|\$|usd|gbp|£|eur|€|cad|aud|jpy|¥)?\s*([\d]+(?:\.\d+)?)\s*(k|lakh)?(?!\s*(?:inch|cm|mm))\s*(?:rs\.?|inr|rupees?|\$|usd)?",
+            clean_num_query,
+        )
+
+        target_match = b_before or b_curr_pre or b_curr_post or b_after
         if target_match:
-            val_str = target_match.group(1).replace(",", "")
+            val_str = target_match.group(1)
             multiplier = target_match.group(2)
             try:
                 val = float(val_str)
@@ -179,18 +205,23 @@ class QueryUnderstander:
                     val *= 1000
                 elif multiplier == "lakh":
                     val *= 100000
-                # Filter out screen sizes like 55 inch if wrongly captured
-                if val > 100:
+                if val > 50:
                     budget_max = val
             except ValueError:
                 pass
 
-        # 2. Category & Product Type
+        # 2. Category & Product Type (Order carefully: headphones before phone!)
         category = None
         product_type = None
-        if any(w in lower for w in ["laptop", "notebook", "macbook"]):
+        if any(w in lower for w in ["smartwatch", "watch", "watches", "smart watch"]):
+            category = "smartwatch" if "smart" in lower else "watch"
+            product_type = "smartwatch" if "smart" in lower else "watch"
+        elif any(w in lower for w in ["laptop", "notebook", "macbook"]):
             category = "laptop"
             product_type = "laptop"
+        elif any(w in lower for w in ["headphones", "earphones", "earbuds", "airpods"]):
+            category = "headphones"
+            product_type = "headphones"
         elif any(w in lower for w in ["phone", "smartphone", "iphone", "redmi", "galaxy", "pixel", "mobile"]):
             category = "smartphone"
             product_type = "smartphone"
@@ -203,9 +234,6 @@ class QueryUnderstander:
         elif any(w in lower for w in ["shoes", "sneakers", "running shoes"]):
             category = "shoes"
             product_type = "shoes"
-        elif any(w in lower for w in ["headphones", "earphones", "earbuds", "airpods"]):
-            category = "headphones"
-            product_type = "headphones"
 
         # 3. Brand & Model detection
         brand = None
@@ -238,7 +266,7 @@ class QueryUnderstander:
 
         # 6. Keywords
         words = re.findall(r"\b[A-Za-z0-9]+\b", lower)
-        stop_words = {"i", "want", "need", "show", "find", "me", "a", "under", "below", "less", "than", "within", "for", "with", "good", "best", "price", "buy", "online", "shop", "shopping", "rs", "inr", "rupee", "rupees", "ke", "andar", "chahiye", "kaha", "sasta", "milega", "wali", "wala", "the", "in", "and"}
+        stop_words = {"i", "want", "need", "show", "find", "me", "a", "under", "below", "less", "than", "within", "for", "with", "good", "best", "price", "buy", "online", "shop", "shopping", "rs", "inr", "rupee", "rupees", "usd", "gbp", "eur", "cad", "aud", "jpy", "ke", "andar", "chahiye", "kaha", "sasta", "milega", "wali", "wala", "the", "in", "and"}
         keywords = [
             w for w in words
             if w not in stop_words

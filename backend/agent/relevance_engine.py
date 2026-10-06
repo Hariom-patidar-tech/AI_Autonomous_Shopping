@@ -16,6 +16,27 @@ CATEGORY_INCOMPATIBILITIES = {
 }
 
 
+TERM_SYNONYMS = {
+    "smartphone": ["phone", "smartphone", "mobile", "iphone", "handset"],
+    "phone": ["phone", "smartphone", "mobile", "iphone", "handset"],
+    "mobile": ["phone", "smartphone", "mobile", "iphone", "handset"],
+    "laptop": ["laptop", "notebook", "chromebook", "macbook", "ultrabook", "vivobook", "ideapad", "thinkpad", "zenbook"],
+    "watch": ["watch", "smartwatch", "wristwatch", "timepiece"],
+    "smartwatch": ["watch", "smartwatch", "wristwatch", "timepiece"],
+    "earbuds": ["earbud", "earbuds", "earphone", "earphones", "airpod", "airpods", "tws", "headphone", "headphones"],
+    "earbud": ["earbud", "earbuds", "earphone", "earphones", "airpod", "airpods", "tws", "headphone", "headphones"],
+    "headphones": ["earbud", "earbuds", "earphone", "earphones", "airpod", "airpods", "headphone", "headphones", "headset"],
+    "headphone": ["earbud", "earbuds", "earphone", "earphones", "airpod", "airpods", "headphone", "headphones", "headset"],
+    "shoes": ["shoe", "shoes", "sneaker", "sneakers", "footwear", "boot", "boots", "trainer"],
+    "shoe": ["shoe", "shoes", "sneaker", "sneakers", "footwear", "boot", "boots", "trainer"],
+}
+
+
+def _matches_keyword(kw: str, text: str) -> bool:
+    syns = TERM_SYNONYMS.get(kw.lower(), [kw.lower()])
+    return any(syn in text for syn in syns)
+
+
 class RelevanceEngine:
     """
     Evaluates semantic and token relevance, enforces strict category mismatch protection,
@@ -111,13 +132,21 @@ class RelevanceEngine:
             if not any(si in lower_pname for si in shoe_indicators):
                 return False
 
+        if target_cat in {"watch", "smartwatch"} or "watch" in lower_query or "smartwatch" in lower_query:
+            if not any(acc in lower_query for acc in ["strap", "band", "cable", "charger", "guard", "cover"]):
+                if any(acc in lower_pname for acc in ["strap", "watchband", "watch band", "charging cable", "screen guard", "case cover", "protective case"]):
+                    return False
+            watch_indicators = ["watch", "smartwatch", "dial", "timepiece"]
+            if not any(wi in lower_pname for wi in watch_indicators):
+                return False
+
         # Keyword overlap check for arbitrary products (e.g., "cat logo t-shirt")
         if req.keywords:
             meaningful_kws = [kw.lower() for kw in req.keywords if len(kw) > 2 and not kw.isdigit()]
             if meaningful_kws:
-                has_keyword = any(kw in lower_pname for kw in meaningful_kws)
+                has_keyword = any(_matches_keyword(kw, lower_pname) for kw in meaningful_kws)
                 if not has_keyword:
-                    cat_match = bool(target_cat and target_cat in lower_pname)
+                    cat_match = bool(target_cat and _matches_keyword(target_cat, lower_pname))
                     brand_match = bool(req.brand and req.brand.lower() in lower_pname)
                     if not (cat_match or brand_match):
                         return False
@@ -151,11 +180,11 @@ class RelevanceEngine:
                 # Wrong brand
                 return 0.2, False
 
-        # General keyword matching
+        # General keyword matching with synonym support
         if req.keywords:
             meaningful_kws = [kw.lower() for kw in req.keywords if len(kw) > 2 and not kw.isdigit()]
             if meaningful_kws:
-                matches = sum(1 for kw in meaningful_kws if kw in name_lower)
+                matches = sum(1 for kw in meaningful_kws if _matches_keyword(kw, name_lower))
                 ratio = matches / len(meaningful_kws)
                 score = 0.4 + (ratio * 0.6)
                 if ratio >= 0.75 or (len(meaningful_kws) == 1 and matches == 1):

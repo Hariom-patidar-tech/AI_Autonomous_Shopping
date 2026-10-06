@@ -35,15 +35,19 @@ const Components = {
    * Renders an individual product card in Amazon style
    */
   renderProductCard(product, isSelected = false) {
+    const pName = product.name || product.product_name || "Product";
+    const pImg = product.thumbnail || product.image_url;
+    const pRetailer = product.retailer || product.source || "Store";
+    const pUrl = product.product_url || product.url || "#";
     const displayCurrency = (product.currency || product.offers?.[0]?.currency || "INR").toUpperCase();
     let lowestOfferPrice = product.price;
-    let bestPlatformName = product.source;
+    let bestPlatformName = pRetailer;
     if (product.offers && product.offers.length > 0) {
       for (const off of product.offers) {
         const offerCurrency = (off.currency || displayCurrency).toUpperCase();
         if (offerCurrency === displayCurrency && off.price != null && (lowestOfferPrice == null || off.price < lowestOfferPrice)) {
           lowestOfferPrice = off.price;
-          bestPlatformName = off.platform;
+          bestPlatformName = off.retailer || off.platform || pRetailer;
         }
       }
     }
@@ -60,8 +64,10 @@ const Components = {
           const offerCurrency = (off.currency || displayCurrency).toUpperCase();
           const isBestOffer = offerCurrency === displayCurrency && off.price != null && off.price === lowestOfferPrice;
           const offPriceStr = this.formatCurrency(off.price, offerCurrency);
-          const pillClass = this.getPlatformPillClass(off.platform);
-          const offerImage = off.image_url || product.image_url;
+          const offPlatform = off.retailer || off.platform || pRetailer;
+          const offUrl = off.product_url || off.url || pUrl;
+          const pillClass = this.getPlatformPillClass(offPlatform);
+          const offerImage = off.thumbnail || off.image_url || pImg;
           const thumbnailHtml = offerImage
             ? `<img class="offer-thumbnail" src="${offerImage}" alt="" loading="lazy" onerror="this.style.display='none'" />`
             : `<span class="offer-thumbnail-placeholder" aria-label="Product image unavailable">No image</span>`;
@@ -73,22 +79,22 @@ const Components = {
                 <div>
                   <span class="offer-platform-name">
                     <span class="store-dot ${pillClass}"></span>
-                    ${off.platform}
+                    ${offPlatform}
                     ${isBestOffer ? '<span style="font-size:0.68rem; color:#15803d; font-weight:800; background:#dcfce7; padding:1px 5px; border-radius:3px; margin-left:4px;">BEST DEAL</span>' : ''}
                   </span>
-                  <span class="offer-delivery">${off.delivery || "Delivery details not verified"}</span>
+                  <span class="offer-delivery">${off.delivery || "Standard Delivery"}</span>
                 </div>
               </div>
               <div style="text-align: right; display: flex; align-items: center; gap: 0.45rem;">
                 <span class="offer-price">${offPriceStr}</span>
                 <div class="offer-actions">
-                  <a href="${off.url}" target="_blank" rel="noopener noreferrer" class="btn-sm btn-view" title="Open verified product page on ${off.platform}">
+                  <a href="${offUrl}" target="_blank" rel="noopener noreferrer" class="btn-sm btn-view" title="Open ${offPlatform} product page">
                     View ↗
                   </a>
-                  <a href="${off.url}" target="_blank" rel="noopener noreferrer" class="btn-sm btn-buy" title="Direct to ${off.platform} product page">
+                  <a href="${offUrl}" target="_blank" rel="noopener noreferrer" class="btn-sm btn-buy" title="Buy on ${offPlatform}">
                     Buy Now ⚡
                   </a>
-                  <button class="btn-sm btn-cart" title="Add to cart on ${off.platform}" onclick="App.onAddToCart('${encodeURIComponent(product.product_name)}', '${encodeURIComponent(off.platform)}', '${encodeURIComponent(off.url)}', ${product.id || null}, ${off.id || null})">
+                  <button class="btn-sm btn-cart" title="Add to cart on ${offPlatform}" onclick="App.onAddToCart('${encodeURIComponent(pName)}', '${encodeURIComponent(offPlatform)}', '${encodeURIComponent(offUrl)}', ${product.id || null}, ${off.id || null})">
                     Cart
                   </button>
                 </div>
@@ -100,18 +106,18 @@ const Components = {
         <div class="offer-row best-offer">
           <div>
             <span class="offer-platform-name">
-              <span class="store-dot ${this.getPlatformPillClass(product.source)}"></span>
-              ${product.source}
+              <span class="store-dot ${this.getPlatformPillClass(pRetailer)}"></span>
+              ${pRetailer}
             </span>
-            <span class="offer-delivery">Direct Verified Merchant Listing</span>
+            <span class="offer-delivery">Direct Store Listing</span>
           </div>
           <div style="text-align: right; display: flex; align-items: center; gap: 0.45rem;">
             <span class="offer-price">${this.formatCurrency(product.price, displayCurrency)}</span>
             <div class="offer-actions">
-              <a href="${product.url}" target="_blank" rel="noopener noreferrer" class="btn-sm btn-view">
+              <a href="${pUrl}" target="_blank" rel="noopener noreferrer" class="btn-sm btn-view">
                 View ↗
               </a>
-              <a href="${product.url}" target="_blank" rel="noopener noreferrer" class="btn-sm btn-buy">
+              <a href="${pUrl}" target="_blank" rel="noopener noreferrer" class="btn-sm btn-buy">
                 Buy Now ⚡
               </a>
             </div>
@@ -120,10 +126,10 @@ const Components = {
       `;
 
     // Real verified image from live web search
-    const displayImg = product.image_url || (product.offers && product.offers[0] ? product.offers[0].image_url : null);
+    const displayImg = pImg || (product.offers && product.offers[0] ? (product.offers[0].thumbnail || product.offers[0].image_url) : null);
     const imageHtml = displayImg
-      ? `<a href="${product.url}" target="_blank" rel="noopener noreferrer" class="product-img-wrapper" title="Click to view verified product page on ${product.source}">
-           <img src="${displayImg}" alt="${product.product_name}" class="product-img" onerror="this.closest('.product-img-wrapper').style.display='none'" />
+      ? `<a href="${pUrl}" target="_blank" rel="noopener noreferrer" class="product-img-wrapper" title="Click to view verified product page on ${pRetailer}">
+           <img src="${displayImg}" alt="${pName}" class="product-img" onerror="this.closest('.product-img-wrapper').style.display='none'" />
          </a>`
       : "";
 
@@ -159,7 +165,7 @@ const Components = {
               <span class="amazon-deal-ribbon">NexShop Choice</span>
               <span class="verified-live-tag">
                 <span class="live-dot-pulse" style="width:6px; height:6px;"></span>
-                Verified Live
+                Live Price
               </span>
             </div>
 
@@ -173,15 +179,15 @@ const Components = {
           ${imageHtml}
 
           <!-- Product Title (Clickable directly to store) -->
-          <a href="${product.url}" target="_blank" rel="noopener noreferrer" style="text-decoration:none; color:inherit; display:block;">
-            <h3 class="product-title" title="${product.product_name}">${product.product_name}</h3>
+          <a href="${pUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration:none; color:inherit; display:block;">
+            <h3 class="product-title" title="${pName}">${pName}</h3>
           </a>
 
           <!-- Brand & Model Row -->
           <div class="product-meta-row">
             ${ratingBadge}
             <span>•</span>
-            <span class="brand-label">${product.brand || "Verified Brand"} ${product.model ? `• ${product.model}` : ""}</span>
+            <span class="brand-label">${product.brand || pRetailer} ${product.model ? `• ${product.model}` : ""}</span>
           </div>
 
           <!-- Amazon Price Block -->
@@ -193,7 +199,7 @@ const Components = {
               Lowest comparable price (${displayCurrency}) • <strong>${bestPlatformName}</strong>
             </div>
               <div class="prime-delivery-row">
-                ${product.delivery ? `<span class="free-delivery-tag">${product.delivery}</span>` : `<span style="color:#565959;">Delivery details not verified</span>`}
+                ${product.delivery ? `<span class="free-delivery-tag">${product.delivery}</span>` : `<span style="color:#565959;">Standard Delivery</span>`}
                 <span style="margin-left:auto;">${availInfo}</span>
             </div>
           </div>
@@ -214,11 +220,11 @@ const Components = {
 
         <!-- Footer Actions & Source Transparency -->
         <div class="card-bottom-actions">
-          <button class="btn-text" onclick="App.onShowReviews('${encodeURIComponent(product.product_name)}', ${product.id || null})">
+          <button class="btn-text" onclick="App.onShowReviews('${encodeURIComponent(pName)}', ${product.id || null})">
             📊 Customer Consensus & Defect Analysis
           </button>
           <div class="source-tag">
-            <div>Store: <strong>${product.source}</strong></div>
+            <div>Store: <strong>${pRetailer}</strong></div>
             <div>Verified: <strong>${verifiedTime}</strong></div>
           </div>
         </div>

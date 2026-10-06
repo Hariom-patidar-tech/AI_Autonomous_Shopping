@@ -1,4 +1,5 @@
 from __future__ import annotations
+import ipaddress
 import re
 import logging
 from typing import Tuple, Optional
@@ -17,6 +18,11 @@ TRUSTED_COMMERCE_DOMAINS = {
     "ajio.com",
     "meesho.com",
     "nykaa.com",
+    "boat-lifestyle.com",
+    "gonoise.com",
+    "fireboltt.com",
+    "boultaudio.com",
+    "ptron.in",
     "apple.com",
     "samsung.com",
     "mi.com",
@@ -62,9 +68,18 @@ class URLVerifier:
 
         try:
             parsed = urlparse(url)
-            domain = parsed.netloc.lower().replace("www.", "")
+            if parsed.username or parsed.password or not parsed.hostname:
+                return False, "unverified", ""
+            domain = parsed.hostname.lower().rstrip(".").removeprefix("www.")
             if not domain or "." not in domain:
                 return False, "unverified", ""
+            if domain.endswith((".localhost", ".local", ".internal")):
+                return False, "unverified", ""
+            try:
+                if not ipaddress.ip_address(domain).is_global:
+                    return False, "unverified", ""
+            except ValueError:
+                pass
 
             # Check if domain is a recognized shopping or retail/tech domain
             is_known_commerce = any(
@@ -75,7 +90,7 @@ class URLVerifier:
                 return True, "verified", url
 
             # Google Search Grounding redirect links are verified Google results
-            if "google.com" in domain or "vertexaisearch.cloud.google.com" in domain:
+            if domain == "google.com" or domain.endswith(".google.com") or domain == "vertexaisearch.cloud.google.com":
                 return True, "verified", url
 
             # General valid web URL
@@ -93,7 +108,9 @@ class URLVerifier:
             parsed = urlparse(raw_url)
             if parsed.scheme.lower() != "https" or not parsed.hostname:
                 return False
-            host = parsed.hostname.lower().removeprefix("www.")
+            if parsed.username or parsed.password:
+                return False
+            host = parsed.hostname.lower().rstrip(".").removeprefix("www.")
             segments = [part.lower() for part in parsed.path.split("/") if part]
             if not segments:
                 return False
@@ -109,23 +126,40 @@ class URLVerifier:
                 else:
                     return False
 
-            if host.endswith("amazon.com") or host.endswith("amazon.in"):
+            if URLVerifier._matches_domain(host, "amazon.com") or URLVerifier._matches_domain(host, "amazon.in"):
                 return bool(re.search(r"/(?:dp|gp/product|gp/aw/d)/[a-z0-9]{6,}", parsed.path, re.I))
-            if host.endswith("flipkart.com"):
+            if URLVerifier._matches_domain(host, "flipkart.com"):
                 return bool(re.search(r"/p/[a-z0-9]+", parsed.path, re.I))
-            if host.endswith("walmart.com"):
+            if any(URLVerifier._matches_domain(host, d) for d in ("boat-lifestyle.com", "gonoise.com", "fireboltt.com", "boultaudio.com", "ptron.in")):
+                return bool(re.search(r"/products/[a-z0-9\-]+", parsed.path, re.I))
+            if URLVerifier._matches_domain(host, "croma.com"):
+                return bool(re.search(r"/p/\d+", parsed.path, re.I))
+            if URLVerifier._matches_domain(host, "reliancedigital.in"):
+                return bool(re.search(r"/p/[a-z0-9\-]+", parsed.path, re.I))
+            if URLVerifier._matches_domain(host, "walmart.com"):
                 return bool(re.search(r"/ip/[^/]+/\d+", parsed.path, re.I))
-            if host.endswith("ebay.com"):
+            if URLVerifier._matches_domain(host, "ebay.com"):
                 return bool(re.search(r"/itm/(?:[^/]+/)?\d+", parsed.path, re.I))
-            if host.endswith("bestbuy.com"):
+            if URLVerifier._matches_domain(host, "bestbuy.com"):
                 return bool(re.search(r"/site/[^/]+/\d+\.p", parsed.path, re.I))
 
-            query_keys = {key.lower() for key in parsed.query.split("&") if "=" in key for key in [key.split("=", 1)[0]]}
+            retailer_domains = (
+                "amazon.in", "amazon.com", "flipkart.com", "croma.com", "reliancedigital.in",
+                "walmart.com", "bestbuy.com", "ebay.com",
+            )
+            if any(domain in host for domain in retailer_domains):
+                return False
+
+            query_keys = {part.split("=", 1)[0].lower() for part in parsed.query.split("&") if "=" in part}
             if query_keys & {"q", "query", "search", "keyword", "keywords", "k"}:
                 return False
             return True
         except (TypeError, ValueError):
             return False
+
+    @staticmethod
+    def _matches_domain(host: str, domain: str) -> bool:
+        return host == domain or host.endswith("." + domain)
 
 
 class ImageVerifier:
@@ -138,6 +172,8 @@ class ImageVerifier:
         "flixcart.com",
         "croma.com",
         "reliancedigital.in",
+        "shopify.com",
+        "cdn.shopify.com",
         "myntassets.com",
         "assets.ajio.com",
         "apple.com",
@@ -167,12 +203,14 @@ class ImageVerifier:
 
         # Check for placeholder or generic stock images
         lower_url = url.lower()
+        host = urlparse(url).hostname or ""
+        host = host.lower().rstrip(".").removeprefix("www.")
         if any(bad in lower_url for bad in ["placeholder", "dummy", "default-product", "avatar", "icon"]):
             return None
 
         # Check extension or CDN or thumbnail parameters
         has_ext = any(ext in lower_url for ext in cls.IMAGE_EXTENSIONS)
-        has_cdn = any(cdn in lower_url for cdn in cls.KNOWN_IMAGE_CDNS)
+        has_cdn = any(host == cdn or host.endswith("." + cdn) for cdn in cls.KNOWN_IMAGE_CDNS)
         has_thumb_param = "th?id=" in lower_url or "pid=" in lower_url or "tse" in lower_url
 
         if has_ext or has_cdn or has_thumb_param:

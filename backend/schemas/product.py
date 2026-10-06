@@ -20,6 +20,18 @@ class ProductOffer(BaseModel):
     supported_actions: List[str] = Field(
         default_factory=lambda: ["view_product", "add_to_cart", "buy_now"]
     )
+    # Universal schema compatibility aliases
+    retailer: Optional[str] = None
+    thumbnail: Optional[str] = None
+    product_url: Optional[str] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.retailer:
+            self.retailer = self.platform
+        if not self.thumbnail:
+            self.thumbnail = self.image_url
+        if not self.product_url:
+            self.product_url = self.url
 
 
 class Product(BaseModel):
@@ -46,6 +58,25 @@ class Product(BaseModel):
     observed_at: str
     last_verified_at: str
     offers: List[ProductOffer] = Field(default_factory=list)
+
+    # Universal schema compatibility aliases
+    name: Optional[str] = None
+    thumbnail: Optional[str] = None
+    retailer: Optional[str] = None
+    product_url: Optional[str] = None
+    product_id: Optional[str] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.name:
+            self.name = self.product_name
+        if not self.thumbnail:
+            self.thumbnail = self.image_url
+        if not self.retailer:
+            self.retailer = self.source
+        if not self.product_url:
+            self.product_url = self.url
+        if not self.product_id:
+            self.product_id = str(self.id or self.url)
 
 
 class PriceComparisonSummary(BaseModel):
