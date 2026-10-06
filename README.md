@@ -86,7 +86,7 @@ APP_NAME=Universal AI Shopping & Price Comparison Agent
 APP_ENV=production
 DEBUG=false
 HOST=0.0.0.0
-PORT=8000
+PORT=8001
 
 # Google Gemini API Key
 GEMINI_API_KEY=your_gemini_api_key_here
@@ -133,6 +133,13 @@ Open your browser at **[http://localhost:8001/](http://localhost:8000/)**.
 
 ---
 
+## Image - 
+
+<img width="883" height="457" alt="image" src="https://github.com/user-attachments/assets/65ede755-ac25-4b5e-a898-dae9470f558a" />
+<img width="923" height="448" alt="image" src="https://github.com/user-attachments/assets/85f106b4-5336-42f1-9496-f3a4dd6729e4" />
+
+
+---
 ## 🔒 Security & Safety Guarantees
 
 1. **Anti-Hallucination Policy**: Search snippets discover candidate URLs only. A candidate is shown only after its HTTPS product-detail page supplies product-specific structured data, an exact offer price and ISO currency, and a product image. Home, category, search, aggregate-price, missing-price, and missing-image results are rejected. If live sources cannot verify offers, the API returns an empty result rather than mock, dummy, or fabricated data.
